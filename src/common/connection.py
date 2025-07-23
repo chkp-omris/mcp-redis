@@ -22,13 +22,18 @@ class RedisConnectionPool:
             "lib_name": f"redis-py(mcp-server_v{__version__})",
         }
         
-        # Add all config parameters, filtering out None values
+        cluster_mode = config.get("cluster_mode", False)
+        
+        # Add all config parameters, filtering out None values and cluster-incompatible params
         for key, value in config.items():
             if value is not None and key != "cluster_mode":
+                # Skip 'db' parameter in cluster mode as it's not supported
+                if cluster_mode and key == "db":
+                    continue
                 base_params[key] = value
                 
         # Set connection limits based on cluster mode
-        if config.get("cluster_mode", False):
+        if cluster_mode:
             base_params["max_connections_per_node"] = 10
         else:
             base_params["max_connections"] = 10
