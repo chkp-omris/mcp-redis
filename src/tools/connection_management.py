@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from src.common.connection import RedisConnectionManager
+from src.common.connection import RedisConnectionPool
 from src.common.config import build_redis_config
 from src.common.server import mcp
 import urllib.parse
@@ -44,8 +44,6 @@ async def connect(
         Success message with connection details or error message.
     """
     try:
-        pool = RedisConnectionManager.get_pool()
-        
         # Build configuration using unified logic
         config, generated_host_id = build_redis_config(
             url=url, host=host, port=port, db=db, username=username,
@@ -59,7 +57,7 @@ async def connect(
         final_host_id = host_id or generated_host_id
         
         # Add connection to pool
-        result = pool.add_connection(final_host_id, config)
+        result = RedisConnectionPool.add_connection_to_pool(final_host_id, config)
         
         return f"{result}. Host identifier: '{final_host_id}'"
         
@@ -75,8 +73,7 @@ async def list_connections() -> Dict[str, Any]:
         Dictionary containing details of all active connections.
     """
     try:
-        pool = RedisConnectionManager.get_pool()
-        connections = pool.list_connections()
+        connections = RedisConnectionPool.list_connections_in_pool()
         
         if not connections:
             return {"message": "No active connections", "connections": {}}
@@ -101,8 +98,7 @@ async def disconnect(host_id: str) -> str:
         Success message or error message.
     """
     try:
-        pool = RedisConnectionManager.get_pool()
-        result = pool.remove_connection(host_id)
+        result = RedisConnectionPool.remove_connection_from_pool(host_id)
         return result
         
     except Exception as e:
@@ -120,7 +116,7 @@ async def switch_default_connection(host_id: str) -> str:
         Success message or error message.
     """
     try:
-        pool = RedisConnectionManager.get_pool()
+        pool = RedisConnectionPool.get_instance()
         
         # Check if connection exists
         if host_id not in pool._connections:
@@ -133,3 +129,28 @@ async def switch_default_connection(host_id: str) -> str:
         
     except Exception as e:
         return f"Failed to switch default connection: {str(e)}"
+
+
+@mcp.tool()
+async def get_connection(host_id: Optional[str] = None) -> Dict[str, Any]:
+    """Get details for a specific Redis connection or the default connection.
+    
+    Args:
+        host_id: The identifier of the connection to get details for. If not provided, uses the default connection.
+    
+    Returns:
+        Dictionary containing connection details or error message.
+    """
+    try:
+        details = RedisConnectionPool.get_connection_details_from_pool(host_id)
+        
+        if "error" in details:
+            return {"error": details["error"]}
+        
+        return {
+            "message": f"Connection details for '{details['host_id']}'",
+            "connection": details
+        }
+        
+    except Exception as e:
+        return {"error": f"Failed to get connection details: {str(e)}"}

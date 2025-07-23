@@ -2,7 +2,8 @@ import sys
 import click
 import asyncio
 
-from src.common.config import build_redis_config, set_redis_config_from_cli
+from src.common.config import build_redis_config
+from src.common.connection import RedisConnectionPool
 from src.common.stdio_server import serve_stdio
 from src.common.streaming_server import serve_streaming
 import src.tools.server_management
@@ -42,38 +43,34 @@ def cli(transport, http_host, http_port, url, host, port, db, username, password
         ssl_cert_reqs, ssl_ca_certs, cluster_mode):
     """Redis MCP Server - Model Context Protocol server for Redis."""
     
-    print("Starting the Redis MCP Server", file=sys.stderr)
-
-    # Handle Redis URI if provided
-    if url:
-        try:
-            config, _ = build_redis_config(
-                url=url, cluster_mode=cluster_mode
-            )
-            set_redis_config_from_cli(config)
-        except ValueError as e:
-            click.echo(f"Error parsing Redis URI: {e}", err=True)
-            sys.exit(1)
-    else:
-        # Set individual Redis parameters using unified logic
-        config, _ = build_redis_config(
-            host=host, port=port, db=db, username=username, password=password,
+    try:
+        # Build configuration using unified logic - URL takes precedence but individual params can override
+        config, host_id = build_redis_config(
+            url=url, host=host, port=port, db=db, username=username, password=password,
             ssl=ssl, ssl_ca_path=ssl_ca_path, ssl_keyfile=ssl_keyfile,
             ssl_certfile=ssl_certfile, ssl_cert_reqs=ssl_cert_reqs,
             ssl_ca_certs=ssl_ca_certs, cluster_mode=cluster_mode
         )
-        set_redis_config_from_cli(config)
+        
+        # Add connection directly to pool
+        RedisConnectionPool.add_connection_to_pool(host_id, config)
+        
+    except ValueError as e:
+        click.echo(f"Error parsing Redis configuration: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error connecting to Redis: {e}", err=True)
+        sys.exit(1)
 
     # Start the appropriate server
     if transport == "streamable-http":
-        print(f"Starting streamable HTTP server on {http_host}:{http_port}", file=sys.stderr)
         asyncio.run(serve_streaming(host=http_host, port=http_port))
     else:
         asyncio.run(serve_stdio())
 
 
 def main():
-    """Legacy main function for backward compatibility."""
+    """Main entry point for backward compatibility."""
     cli()
 
 
