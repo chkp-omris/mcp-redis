@@ -1,3 +1,4 @@
+from typing import Optional
 from src.common.connection import RedisConnectionManager
 from redis.exceptions import RedisError
 from src.common.server import mcp
