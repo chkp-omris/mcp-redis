@@ -81,6 +81,82 @@ def parse_redis_uri(uri: str) -> dict:
     return config
 
 
+def build_redis_config(url=None, host=None, port=None, db=None, username=None, 
+                      password=None, ssl=None, ssl_ca_path=None, ssl_keyfile=None,
+                      ssl_certfile=None, ssl_cert_reqs=None, ssl_ca_certs=None,
+                      cluster_mode=None, host_id=None):
+    """
+    Build Redis configuration from URL or individual parameters.
+    Handles cluster mode conflicts and parameter validation.
+    
+    Returns:
+        dict: Redis configuration dictionary
+        str: Generated host_id if not provided
+    """
+    # Parse configuration from URL or individual parameters
+    if url:
+        config = parse_redis_uri(url)
+        parsed_url = urllib.parse.urlparse(url)
+        # Generate host_id from URL if not provided
+        if host_id is None:
+            host_id = f"{parsed_url.hostname}:{parsed_url.port or 6379}"
+    else:
+        # Build config from individual parameters
+        config = {
+            "host": host or "127.0.0.1",
+            "port": port or 6379,
+            "db": db or 0,
+            "username": username,
+            "password": password or "",
+            "ssl": ssl or False,
+            "ssl_ca_path": ssl_ca_path,
+            "ssl_keyfile": ssl_keyfile,
+            "ssl_certfile": ssl_certfile,
+            "ssl_cert_reqs": ssl_cert_reqs or "required",
+            "ssl_ca_certs": ssl_ca_certs,
+            "cluster_mode": cluster_mode or False
+        }
+        # Generate host_id from host:port if not provided
+        if host_id is None:
+            host_id = f"{config['host']}:{config['port']}"
+    
+    # Override individual parameters if provided (useful when using URL + specific overrides)
+    if host is not None:
+        config["host"] = host
+    if port is not None:
+        config["port"] = port
+    if db is not None:
+        config["db"] = db
+    if username is not None:
+        config["username"] = username
+    if password is not None:
+        config["password"] = password
+    if ssl is not None:
+        config["ssl"] = ssl
+    if ssl_ca_path is not None:
+        config["ssl_ca_path"] = ssl_ca_path
+    if ssl_keyfile is not None:
+        config["ssl_keyfile"] = ssl_keyfile
+    if ssl_certfile is not None:
+        config["ssl_certfile"] = ssl_certfile
+    if ssl_cert_reqs is not None:
+        config["ssl_cert_reqs"] = ssl_cert_reqs
+    if ssl_ca_certs is not None:
+        config["ssl_ca_certs"] = ssl_ca_certs
+    if cluster_mode is not None:
+        config["cluster_mode"] = cluster_mode
+    
+    # Handle cluster mode conflicts
+    if config.get("cluster_mode", False):
+        if 'db' in config and config['db'] != 0:
+            import sys
+            print(f"Warning: Database parameter (db={config['db']}) ignored in cluster mode", file=sys.stderr)
+        # Remove db parameter in cluster mode as it's not supported
+        config.pop('db', None)
+    
+    return config, host_id
+
+
 def set_redis_config_from_cli(config: dict):
     for key, value in config.items():
         if key in ['port', 'db']:

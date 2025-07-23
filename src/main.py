@@ -2,7 +2,7 @@ import sys
 import click
 import asyncio
 
-from src.common.config import parse_redis_uri, set_redis_config_from_cli
+from src.common.config import build_redis_config, set_redis_config_from_cli
 from src.common.stdio_server import serve_stdio
 from src.common.streaming_server import serve_streaming
 import src.tools.server_management
@@ -47,36 +47,21 @@ def cli(transport, http_host, http_port, url, host, port, db, username, password
     # Handle Redis URI if provided
     if url:
         try:
-            uri_config = parse_redis_uri(url)
-            set_redis_config_from_cli(uri_config)
+            config, _ = build_redis_config(
+                url=url, cluster_mode=cluster_mode
+            )
+            set_redis_config_from_cli(config)
         except ValueError as e:
             click.echo(f"Error parsing Redis URI: {e}", err=True)
             sys.exit(1)
     else:
-        # Set individual Redis parameters
-        config = {
-            'host': host,
-            'port': port,
-            'db': db,
-            'ssl': ssl,
-            'cluster_mode': cluster_mode
-        }
-
-        if username:
-            config['username'] = username
-        if password:
-            config['password'] = password
-        if ssl_ca_path:
-            config['ssl_ca_path'] = ssl_ca_path
-        if ssl_keyfile:
-            config['ssl_keyfile'] = ssl_keyfile
-        if ssl_certfile:
-            config['ssl_certfile'] = ssl_certfile
-        if ssl_cert_reqs:
-            config['ssl_cert_reqs'] = ssl_cert_reqs
-        if ssl_ca_certs:
-            config['ssl_ca_certs'] = ssl_ca_certs
-
+        # Set individual Redis parameters using unified logic
+        config, _ = build_redis_config(
+            host=host, port=port, db=db, username=username, password=password,
+            ssl=ssl, ssl_ca_path=ssl_ca_path, ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile, ssl_cert_reqs=ssl_cert_reqs,
+            ssl_ca_certs=ssl_ca_certs, cluster_mode=cluster_mode
+        )
         set_redis_config_from_cli(config)
 
     # Start the appropriate server
