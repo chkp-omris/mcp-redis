@@ -155,12 +155,16 @@ def build_redis_config(url=None, host=None, port=None, db=None, username=None,
             host_id = f"{config['host']}:{config['port']}"
     
     # Override individual parameters if provided (useful when using URL + specific overrides)
-    if host is not None:
-        config["host"] = host
-    if port is not None:
-        config["port"] = port
-    if db is not None:
-        config["db"] = db
+    # Only override URL values if the parameter was explicitly specified
+    if url is None or (host is not None and host != "127.0.0.1"):
+        if host is not None:
+            config["host"] = host
+    if url is None or (port is not None and port != 6379):
+        if port is not None:
+            config["port"] = port
+    if url is None or (db is not None and db != 0):
+        if db is not None:
+            config["db"] = db
     if username is not None:
         config["username"] = username
     if password is not None:
