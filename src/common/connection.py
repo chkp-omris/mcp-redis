@@ -1,10 +1,17 @@
 import sys
 import urllib.parse
 from typing import Dict, Optional, Type, Union, Any
+from enum import Enum
 from src.version import __version__
 import redis
 from redis import Redis
 from redis.cluster import RedisCluster, ClusterNode
+
+
+class DecodeResponsesType(Enum):
+    """Enum for decode_responses connection types."""
+    DECODED = "decoded"      # decode_responses=True
+    RAW = "raw"             # decode_responses=False
 
 
 class RedisConnectionPool:
@@ -20,7 +27,8 @@ class RedisConnectionPool:
     
     def __init__(self):
         if not self._initialized:
-            self._connections: Dict[str, Redis] = {}
+            # Store connections with separate pools for DECODED/RAW
+            self._connections: Dict[str, Dict[DecodeResponsesType, Redis]] = {}  # host_id -> {DECODED: conn, RAW: conn}
             self._configs: Dict[str, dict] = {}  # Store original configurations
             self._default_host: Optional[str] = None
             self._initialized = True
@@ -63,21 +71,29 @@ class RedisConnectionPool:
     def add_connection(self, host_id: str, config: dict, decode_responses: bool = True) -> str:
         """Add a new Redis connection to the pool."""
         try:
+            # Initialize connection dict for this host if not exists
+            if host_id not in self._connections:
+                self._connections[host_id] = {}
+            
+            # Convert boolean to enum
+            decode_type = DecodeResponsesType.DECODED if decode_responses else DecodeResponsesType.RAW
+            
+            # Create connection with the specified decode_responses setting
             connection_params = self._create_connection_params(config, decode_responses)
             redis_class = self._get_redis_class(config.get("cluster_mode", False))
             
             connection = redis_class(**connection_params)
             connection.ping()
             
-            # Store the connection and its configuration
-            self._connections[host_id] = connection
+            # Store the connection for this decode type
+            self._connections[host_id][decode_type] = connection
             self._configs[host_id] = config.copy()  # Store original config
             
             # Set as default if it's the first connection
             if self._default_host is None:
                 self._default_host = host_id
                 
-            return f"Successfully connected to Redis at {host_id}"
+            return f"Successfully connected to Redis at {host_id} ({decode_type.value} mode)"
             
         except redis.exceptions.ConnectionError as e:
             raise Exception(f"Failed to connect to Redis server at {host_id}: {e}")
@@ -94,7 +110,7 @@ class RedisConnectionPool:
         except Exception as e:
             raise Exception(f"Unexpected error connecting to Redis server at {host_id}: {e}")
     
-    def get_connection(self, host_id: Optional[str] = None) -> Redis:
+    def get_connection(self, host_id: Optional[str] = None, decode_responses: bool = True) -> Redis:
         """Get a Redis connection by host identifier."""
         if host_id is None:
             host_id = self._default_host
@@ -104,27 +120,48 @@ class RedisConnectionPool:
             
         if host_id not in self._connections:
             raise Exception(f"No connection found for host '{host_id}'. Available hosts: {list(self._connections.keys())}")
+        
+        # Convert boolean to enum
+        decode_type = DecodeResponsesType.DECODED if decode_responses else DecodeResponsesType.RAW
+        
+        # Check if we have a connection with the desired decode type
+        if decode_type not in self._connections[host_id]:
+            # Create a new connection with the desired decode_responses setting
+            config = self._configs[host_id]
+            connection_params = self._create_connection_params(config, decode_responses)
+            redis_class = self._get_redis_class(config.get("cluster_mode", False))
             
-        return self._connections[host_id]
+            try:
+                connection = redis_class(**connection_params)
+                connection.ping()
+                self._connections[host_id][decode_type] = connection
+            except Exception as e:
+                raise Exception(f"Failed to create connection with {decode_type.value} mode for host '{host_id}': {e}")
+            
+        return self._connections[host_id][decode_type]
     
     def list_connections(self) -> Dict[str, dict]:
         """List all active connections with their details."""
         result = {}
-        for host_id, conn in self._connections.items():
+        for host_id, conn_dict in self._connections.items():
             try:
-                info = conn.info("server")
-                config = self._configs.get(host_id, {})
-                
-                result[host_id] = {
-                    "status": "connected",
-                    "redis_version": info.get("redis_version", "unknown"),
-                    "host": config.get("host", getattr(conn, 'host', 'unknown')),
-                    "port": config.get("port", getattr(conn, 'port', 'unknown')),
-                    "db": config.get("db", getattr(conn, 'db', 'unknown')),
-                    "cluster_mode": config.get("cluster_mode", False),
-                    "ssl": config.get("ssl", False),
-                    "is_default": host_id == self._default_host
-                }
+                # Get info from the DECODED connection if available, fallback to RAW
+                conn = conn_dict.get(DecodeResponsesType.DECODED) or conn_dict.get(DecodeResponsesType.RAW)
+                if conn:
+                    info = conn.info("server")
+                    config = self._configs.get(host_id, {})
+                    
+                    result[host_id] = {
+                        "status": "connected",
+                        "redis_version": info.get("redis_version", "unknown"),
+                        "host": config.get("host", getattr(conn, 'host', 'unknown')),
+                        "port": config.get("port", getattr(conn, 'port', 'unknown')),
+                        "db": config.get("db", getattr(conn, 'db', 'unknown')),
+                        "cluster_mode": config.get("cluster_mode", False),
+                        "ssl": config.get("ssl", False),
+                        "is_default": host_id == self._default_host,
+                        "available_modes": [decode_type.value for decode_type in conn_dict.keys()]
+                    }
             except Exception as e:
                 config = self._configs.get(host_id, {})
                 result[host_id] = {
@@ -134,7 +171,8 @@ class RedisConnectionPool:
                     "db": config.get("db", "unknown"),
                     "cluster_mode": config.get("cluster_mode", False),
                     "ssl": config.get("ssl", False),
-                    "is_default": host_id == self._default_host
+                    "is_default": host_id == self._default_host,
+                    "available_modes": [decode_type.value for decode_type in conn_dict.keys()] if host_id in self._connections else []
                 }
         return result
     
@@ -150,22 +188,26 @@ class RedisConnectionPool:
             available = list(self._connections.keys())
             return {"error": f"Connection '{host_id}' not found. Available connections: {available}"}
         
-        conn = self._connections[host_id]
+        conn_dict = self._connections[host_id]
         config = self._configs.get(host_id, {})
         
         try:
-            info = conn.info("server")
-            return {
-                "host_id": host_id,
-                "status": "connected",
-                "redis_version": info.get("redis_version", "unknown"),
-                "host": config.get("host", getattr(conn, 'host', 'unknown')),
-                "port": config.get("port", getattr(conn, 'port', 'unknown')),
-                "db": config.get("db", getattr(conn, 'db', 'unknown')),
-                "cluster_mode": config.get("cluster_mode", False),
-                "ssl": config.get("ssl", False),
-                "is_default": host_id == self._default_host
-            }
+            # Get info from the DECODED connection if available, fallback to RAW
+            conn = conn_dict.get(DecodeResponsesType.DECODED) or conn_dict.get(DecodeResponsesType.RAW)
+            if conn:
+                info = conn.info("server")
+                return {
+                    "host_id": host_id,
+                    "status": "connected",
+                    "redis_version": info.get("redis_version", "unknown"),
+                    "host": config.get("host", getattr(conn, 'host', 'unknown')),
+                    "port": config.get("port", getattr(conn, 'port', 'unknown')),
+                    "db": config.get("db", getattr(conn, 'db', 'unknown')),
+                    "cluster_mode": config.get("cluster_mode", False),
+                    "ssl": config.get("ssl", False),
+                    "is_default": host_id == self._default_host,
+                    "available_modes": [decode_type.value for decode_type in conn_dict.keys()]
+                }
         except Exception as e:
             return {
                 "host_id": host_id,
@@ -175,7 +217,8 @@ class RedisConnectionPool:
                 "db": config.get("db", "unknown"),
                 "cluster_mode": config.get("cluster_mode", False),
                 "ssl": config.get("ssl", False),
-                "is_default": host_id == self._default_host
+                "is_default": host_id == self._default_host,
+                "available_modes": [decode_type.value for decode_type in conn_dict.keys()] if host_id in self._connections else []
             }
     
     def remove_connection(self, host_id: str) -> str:
@@ -184,7 +227,13 @@ class RedisConnectionPool:
             return f"No connection found for host '{host_id}'"
             
         try:
-            self._connections[host_id].close()
+            # Close all connections for this host (both DECODED and RAW)
+            conn_dict = self._connections[host_id]
+            for decode_type, conn in conn_dict.items():
+                try:
+                    conn.close()
+                except:
+                    pass  # Ignore close errors
         except:
             pass  # Ignore close errors
             
@@ -209,9 +258,9 @@ class RedisConnectionPool:
         return cls.get_instance().add_connection(host_id, config, decode_responses)
     
     @classmethod
-    def get_connection_from_pool(cls, host_id: Optional[str] = None) -> Redis:
+    def get_connection_from_pool(cls, host_id: Optional[str] = None, decode_responses: bool = True) -> Redis:
         """Class method to get a connection from the singleton pool."""
-        return cls.get_instance().get_connection(host_id)
+        return cls.get_instance().get_connection(host_id, decode_responses)
     
     @classmethod
     def list_connections_in_pool(cls) -> Dict[str, dict]:
@@ -228,9 +277,9 @@ class RedisConnectionPool:
         """Class method to get connection details from the singleton pool."""
         return cls.get_instance().get_connection_details(host_id)
 
-def get_connection(host_id: Optional[str] = None) -> Redis:
+def get_connection(host_id: Optional[str] = None, decode_responses: bool = True) -> Redis:
     """Get a Redis connection by host identifier (legacy function)."""
-    return RedisConnectionPool.get_connection_from_pool(host_id)
+    return RedisConnectionPool.get_connection_from_pool(host_id, decode_responses)
 
 def get_connection_pool() -> RedisConnectionPool:
     """Get the connection pool instance (legacy function)."""
@@ -244,6 +293,11 @@ class RedisConnectionManager:
     def get_connection(cls, host_id: Optional[str] = None, decode_responses=True) -> Redis:
         """Get a connection for the specified host or the default connection."""
         pool = RedisConnectionPool.get_instance()
+        
+        # Get the host_id for the connection
+        if host_id is None:
+            host_id = pool._default_host
+            
         # Initialize default connection if none exists and no specific host_id requested
         if not pool._connections and host_id is None:
             # Create default configuration from environment variables
@@ -251,8 +305,10 @@ class RedisConnectionManager:
             default_config = RedisConfig()
             default_host_id = f"{default_config['host']}:{default_config['port']}"
             pool.add_connection(default_host_id, default_config.config, decode_responses)
-            
-        return pool.get_connection(host_id)
+            host_id = default_host_id
+        
+        # Use the pool's get_connection method which handles both decode_responses types
+        return pool.get_connection(host_id, decode_responses)
     
     @classmethod
     def get_pool(cls) -> RedisConnectionPool:
