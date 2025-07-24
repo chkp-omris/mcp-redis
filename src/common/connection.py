@@ -154,7 +154,16 @@ class RedisConnectionPool:
                 self._connections[host_id][decode_type] = connection
             
             # Store the final config with detected cluster mode
-            self._configs[host_id] = working_config.copy()
+            # For cluster connections, don't preserve db in the stored config
+            config_to_store = working_config.copy()
+            if working_config.get("cluster_mode", False):
+                # Remove db from stored config for cluster connections
+                config_to_store.pop("db", None)
+            elif "db" not in config_to_store:
+                # For standalone connections, ensure db is set to default if not specified
+                config_to_store["db"] = config.get("db", 0)
+            
+            self._configs[host_id] = config_to_store
             
             # Set as default if it's the first connection
             if self._default_host is None:
@@ -209,12 +218,23 @@ class RedisConnectionPool:
                     info = conn.info("server")
                     config = self._configs.get(host_id, {})
                     
+                    # Handle database information properly
+                    is_cluster = config.get("cluster_mode", False)
+                    if is_cluster:
+                        # In cluster mode, database selection is not supported
+                        db_info = "N/A (cluster)"
+                    else:
+                        # For standalone Redis, show the database number
+                        db_info = config.get("db", getattr(conn, 'db', 0))
+                        if db_info == 'unknown':
+                            db_info = 0  # Default to 0 if unknown
+                    
                     result[host_id] = {
                         "status": "connected",
                         "redis_version": info.get("redis_version", "unknown"),
                         "host": config.get("host", getattr(conn, 'host', 'unknown')),
                         "port": config.get("port", getattr(conn, 'port', 'unknown')),
-                        "db": config.get("db", getattr(conn, 'db', 'unknown')),
+                        "db": db_info,
                         "cluster_mode": config.get("cluster_mode", False),
                         "ssl": config.get("ssl", False),
                         "is_default": host_id == self._default_host,
@@ -222,11 +242,20 @@ class RedisConnectionPool:
                     }
             except Exception as e:
                 config = self._configs.get(host_id, {})
+                # Handle database information properly even in error case
+                is_cluster = config.get("cluster_mode", False)
+                if is_cluster:
+                    db_info = "N/A (cluster)"
+                else:
+                    db_info = config.get("db", 0)
+                    if db_info == 'unknown':
+                        db_info = 0
+                
                 result[host_id] = {
                     "status": f"error: {e}",
                     "host": config.get("host", "unknown"),
                     "port": config.get("port", "unknown"),
-                    "db": config.get("db", "unknown"),
+                    "db": db_info,
                     "cluster_mode": config.get("cluster_mode", False),
                     "ssl": config.get("ssl", False),
                     "is_default": host_id == self._default_host,
@@ -254,25 +283,46 @@ class RedisConnectionPool:
             conn = conn_dict.get(DecodeResponsesType.DECODED) or conn_dict.get(DecodeResponsesType.RAW)
             if conn:
                 info = conn.info("server")
+                
+                # Handle database information properly
+                is_cluster = config.get("cluster_mode", False)
+                if is_cluster:
+                    # In cluster mode, database selection is not supported
+                    db_info = "N/A (cluster)"
+                else:
+                    # For standalone Redis, show the database number
+                    db_info = config.get("db", getattr(conn, 'db', 0))
+                    if db_info == 'unknown':
+                        db_info = 0  # Default to 0 if unknown
+                
                 return {
                     "host_id": host_id,
                     "status": "connected",
                     "redis_version": info.get("redis_version", "unknown"),
                     "host": config.get("host", getattr(conn, 'host', 'unknown')),
                     "port": config.get("port", getattr(conn, 'port', 'unknown')),
-                    "db": config.get("db", getattr(conn, 'db', 'unknown')),
+                    "db": db_info,
                     "cluster_mode": config.get("cluster_mode", False),
                     "ssl": config.get("ssl", False),
                     "is_default": host_id == self._default_host,
                     "available_modes": [decode_type.value for decode_type in conn_dict.keys()]
                 }
         except Exception as e:
+            # Handle database information properly even in error case
+            is_cluster = config.get("cluster_mode", False)
+            if is_cluster:
+                db_info = "N/A (cluster)"
+            else:
+                db_info = config.get("db", 0)
+                if db_info == 'unknown':
+                    db_info = 0
+            
             return {
                 "host_id": host_id,
                 "status": f"error: {e}",
                 "host": config.get("host", "unknown"),
                 "port": config.get("port", "unknown"),
-                "db": config.get("db", "unknown"),
+                "db": db_info,
                 "cluster_mode": config.get("cluster_mode", False),
                 "ssl": config.get("ssl", False),
                 "is_default": host_id == self._default_host,
