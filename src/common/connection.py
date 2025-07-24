@@ -66,13 +66,6 @@ class RedisConnectionPool:
             connection_params = self._create_connection_params(config, decode_responses)
             redis_class = self._get_redis_class(config.get("cluster_mode", False))
             
-            # Debug logging for cluster mode
-            cluster_mode = config.get("cluster_mode", False)
-            print(f"DEBUG: Cluster mode: {cluster_mode}", file=sys.stderr)
-            print(f"DEBUG: Config: {config}", file=sys.stderr)
-            print(f"DEBUG: Connection params: {connection_params}", file=sys.stderr)
-            print(f"DEBUG: Redis class: {redis_class}", file=sys.stderr)
-            
             connection = redis_class(**connection_params)
             connection.ping()
             
