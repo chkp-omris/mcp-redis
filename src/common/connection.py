@@ -4,7 +4,7 @@ from typing import Dict, Optional, Type, Union, Any
 from src.version import __version__
 import redis
 from redis import Redis
-from redis.cluster import RedisCluster
+from redis.cluster import RedisCluster, ClusterNode
 
 
 class RedisConnectionPool:
@@ -34,18 +34,24 @@ class RedisConnectionPool:
         
         cluster_mode = config.get("cluster_mode", False)
         
-        # Add all config parameters, filtering out None values and cluster-incompatible params
-        for key, value in config.items():
-            if value is not None and key != "cluster_mode":
-                # Skip 'db' parameter in cluster mode as it's not supported
-                if cluster_mode and key == "db":
-                    continue
-                base_params[key] = value
-                
-        # Set connection limits based on cluster mode
         if cluster_mode:
+            # For cluster mode, we need to use startup_nodes instead of host/port
+            host = config.get("host", "127.0.0.1")
+            port = config.get("port", 6379)
+            startup_nodes = [ClusterNode(host=host, port=port)]
+            base_params["startup_nodes"] = startup_nodes
             base_params["max_connections_per_node"] = 10
+            
+            # Add cluster-specific parameters, excluding host, port, db
+            cluster_incompatible_keys = {"host", "port", "db", "cluster_mode"}
+            for key, value in config.items():
+                if value is not None and key not in cluster_incompatible_keys:
+                    base_params[key] = value
         else:
+            # For non-cluster mode, add all config parameters except cluster_mode
+            for key, value in config.items():
+                if value is not None and key != "cluster_mode":
+                    base_params[key] = value
             base_params["max_connections"] = 10
             
         return base_params
@@ -59,6 +65,14 @@ class RedisConnectionPool:
         try:
             connection_params = self._create_connection_params(config, decode_responses)
             redis_class = self._get_redis_class(config.get("cluster_mode", False))
+            
+            # Debug logging for cluster mode
+            cluster_mode = config.get("cluster_mode", False)
+            print(f"DEBUG: Cluster mode: {cluster_mode}", file=sys.stderr)
+            print(f"DEBUG: Config: {config}", file=sys.stderr)
+            print(f"DEBUG: Connection params: {connection_params}", file=sys.stderr)
+            print(f"DEBUG: Redis class: {redis_class}", file=sys.stderr)
+            
             connection = redis_class(**connection_params)
             connection.ping()
             
@@ -72,12 +86,12 @@ class RedisConnectionPool:
                 
             return f"Successfully connected to Redis at {host_id}"
             
-        except redis.exceptions.ConnectionError:
-            raise Exception(f"Failed to connect to Redis server at {host_id}")
-        except redis.exceptions.AuthenticationError:
-            raise Exception(f"Authentication failed for Redis server at {host_id}")
-        except redis.exceptions.TimeoutError:
-            raise Exception(f"Connection timed out for Redis server at {host_id}")
+        except redis.exceptions.ConnectionError as e:
+            raise Exception(f"Failed to connect to Redis server at {host_id}: {e}")
+        except redis.exceptions.AuthenticationError as e:
+            raise Exception(f"Authentication failed for Redis server at {host_id}: {e}")
+        except redis.exceptions.TimeoutError as e:
+            raise Exception(f"Connection timed out for Redis server at {host_id}: {e}")
         except redis.exceptions.ResponseError as e:
             raise Exception(f"Response error for Redis server at {host_id}: {e}")
         except redis.exceptions.RedisError as e:
