@@ -148,7 +148,7 @@ def build_redis_config(url=None, host=None, port=None, db=None, username=None,
             "ssl_certfile": ssl_certfile,
             "ssl_cert_reqs": ssl_cert_reqs or "required",
             "ssl_ca_certs": ssl_ca_certs,
-            "cluster_mode": cluster_mode or False
+            "cluster_mode": cluster_mode  # Allow None for auto-detection
         }
         # Generate host_id from host:port if not provided
         if host_id is None:

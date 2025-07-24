@@ -8,6 +8,56 @@ from redis import Redis
 from redis.cluster import RedisCluster, ClusterNode
 
 
+def detect_cluster_mode(config: dict) -> bool:
+    """
+    Detect if a Redis instance is running in cluster mode by connecting and checking INFO.
+    
+    Args:
+        config: Redis connection configuration dictionary
+        
+    Returns:
+        True if cluster mode is detected, False otherwise
+    """
+    try:
+        # Create a temporary non-cluster connection to check INFO
+        temp_config = config.copy()
+        temp_config.pop('cluster_mode', None)  # Remove cluster_mode to force standalone connection
+        
+        connection_params = {
+            "decode_responses": True,
+            "lib_name": f"redis-py(mcp-server_v{__version__})",
+        }
+        
+        # Add all config parameters except cluster_mode
+        for key, value in temp_config.items():
+            if value is not None and key != "cluster_mode":
+                connection_params[key] = value
+        connection_params["max_connections"] = 10
+        
+        # Create a temporary Redis connection
+        temp_redis = Redis(**connection_params)
+        
+        # Get server info to check cluster_enabled field
+        info = temp_redis.info("cluster")
+        cluster_enabled = info.get("cluster_enabled", 0)
+        
+        # Close the temporary connection
+        temp_redis.close()
+        
+        # cluster_enabled = 1 means cluster mode is enabled
+        return cluster_enabled == 1
+        
+    except redis.exceptions.ResponseError as e:
+        # If we get "This instance has cluster support disabled", it's not a cluster
+        if "cluster support disabled" in str(e).lower():
+            return False
+        # For other response errors, assume it's not a cluster
+        return False
+    except Exception:
+        # For any other connection issues, default to False
+        return False
+
+
 class DecodeResponsesType(Enum):
     """Enum for decode_responses connection types."""
     DECODED = "decoded"      # decode_responses=True
@@ -68,32 +118,50 @@ class RedisConnectionPool:
         """Get the appropriate Redis class based on cluster mode."""
         return redis.cluster.RedisCluster if cluster_mode else redis.Redis
     
-    def add_connection(self, host_id: str, config: dict, decode_responses: bool = True) -> str:
-        """Add a new Redis connection to the pool."""
+    def add_connection(self, host_id: str, config: dict) -> str:
+        """Add a new Redis connection to the pool. Creates both RAW and DECODED connections."""
         try:
             # Initialize connection dict for this host if not exists
             if host_id not in self._connections:
                 self._connections[host_id] = {}
             
-            # Convert boolean to enum
-            decode_type = DecodeResponsesType.DECODED if decode_responses else DecodeResponsesType.RAW
+            # Auto-detect cluster mode if not explicitly specified
+            working_config = config.copy()
+            if "cluster_mode" not in config or config.get("cluster_mode") is None:
+                detected_cluster_mode = detect_cluster_mode(config)
+                working_config["cluster_mode"] = detected_cluster_mode
+                # Log the detection result
+                if detected_cluster_mode:
+                    print(f"Auto-detected cluster mode for {host_id}")
+                else:
+                    print(f"Auto-detected standalone mode for {host_id}")
             
-            # Create connection with the specified decode_responses setting
-            connection_params = self._create_connection_params(config, decode_responses)
-            redis_class = self._get_redis_class(config.get("cluster_mode", False))
+            # Get the Redis class to use
+            redis_class = self._get_redis_class(working_config.get("cluster_mode", False))
             
-            connection = redis_class(**connection_params)
-            connection.ping()
+            # Create both DECODED and RAW connections
+            for decode_type in DecodeResponsesType:
+                is_decoded = (decode_type == DecodeResponsesType.DECODED)
+                
+                # Create connection parameters for this decode type
+                connection_params = self._create_connection_params(working_config, is_decoded)
+                
+                # Create and test the connection
+                connection = redis_class(**connection_params)
+                connection.ping()
+                
+                # Store the connection
+                self._connections[host_id][decode_type] = connection
             
-            # Store the connection for this decode type
-            self._connections[host_id][decode_type] = connection
-            self._configs[host_id] = config.copy()  # Store original config
+            # Store the final config with detected cluster mode
+            self._configs[host_id] = working_config.copy()
             
             # Set as default if it's the first connection
             if self._default_host is None:
                 self._default_host = host_id
                 
-            return f"Successfully connected to Redis at {host_id} ({decode_type.value} mode)"
+            cluster_status = "cluster" if working_config.get("cluster_mode", False) else "standalone"
+            return f"Successfully connected to Redis at {host_id} (both decoded and raw modes, {cluster_status})"
             
         except redis.exceptions.ConnectionError as e:
             raise Exception(f"Failed to connect to Redis server at {host_id}: {e}")
@@ -124,19 +192,9 @@ class RedisConnectionPool:
         # Convert boolean to enum
         decode_type = DecodeResponsesType.DECODED if decode_responses else DecodeResponsesType.RAW
         
-        # Check if we have a connection with the desired decode type
+        # Both connection types should always exist since add_connection creates both
         if decode_type not in self._connections[host_id]:
-            # Create a new connection with the desired decode_responses setting
-            config = self._configs[host_id]
-            connection_params = self._create_connection_params(config, decode_responses)
-            redis_class = self._get_redis_class(config.get("cluster_mode", False))
-            
-            try:
-                connection = redis_class(**connection_params)
-                connection.ping()
-                self._connections[host_id][decode_type] = connection
-            except Exception as e:
-                raise Exception(f"Failed to create connection with {decode_type.value} mode for host '{host_id}': {e}")
+            raise Exception(f"Connection type {decode_type.value} not found for host '{host_id}'. This should not happen.")
             
         return self._connections[host_id][decode_type]
     
@@ -253,9 +311,9 @@ class RedisConnectionPool:
         return cls()
     
     @classmethod
-    def add_connection_to_pool(cls, host_id: str, config: dict, decode_responses: bool = True) -> str:
+    def add_connection_to_pool(cls, host_id: str, config: dict) -> str:
         """Class method to add a connection to the singleton pool."""
-        return cls.get_instance().add_connection(host_id, config, decode_responses)
+        return cls.get_instance().add_connection(host_id, config)
     
     @classmethod
     def get_connection_from_pool(cls, host_id: Optional[str] = None, decode_responses: bool = True) -> Redis:
@@ -304,7 +362,7 @@ class RedisConnectionManager:
             from src.common.config import RedisConfig
             default_config = RedisConfig()
             default_host_id = f"{default_config['host']}:{default_config['port']}"
-            pool.add_connection(default_host_id, default_config.config, decode_responses)
+            pool.add_connection(default_host_id, default_config.config)
             host_id = default_host_id
         
         # Use the pool's get_connection method which handles both decode_responses types
