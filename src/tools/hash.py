@@ -81,9 +81,53 @@ async def hgetall(name: str, host_id: Optional[str] = None) -> dict:
         A dictionary of field-value pairs or an error message.
     """
     try:
+        # First try with automatic decoding
         r = RedisConnectionManager.get_connection(host_id)
         hash_data = r.hgetall(name)
-        return {k: v for k, v in hash_data.items()} if hash_data else f"Hash '{name}' is empty or does not exist."
+        
+        if not hash_data:
+            return f"Hash '{name}' is empty or does not exist."
+        
+        return hash_data
+        
+    except UnicodeDecodeError:
+        # If automatic decoding fails due to binary data, fall back to manual handling
+        try:
+            r = RedisConnectionManager.get_connection(host_id, decode_responses=False)
+            hash_data = r.hgetall(name)
+            
+            if not hash_data:
+                return f"Hash '{name}' is empty or does not exist."
+            
+            # Handle binary data safely
+            result = {}
+            for k, v in hash_data.items():
+                # Decode keys
+                try:
+                    key = k.decode('utf-8') if isinstance(k, bytes) else str(k)
+                except UnicodeDecodeError:
+                    key = f"<binary_key: {len(k) if isinstance(k, bytes) else 0} bytes>"
+                
+                # Handle values - some might be binary (like vectors), others are strings
+                try:
+                    if isinstance(v, bytes):
+                        # Try to decode as UTF-8, fallback to indicating binary data
+                        try:
+                            value = v.decode('utf-8')
+                        except UnicodeDecodeError:
+                            # This is likely binary data (e.g., vector embeddings)
+                            value = f"<binary_data: {len(v)} bytes>"
+                    else:
+                        value = str(v)
+                    result[key] = value
+                except Exception as e:
+                    result[key] = f"<decode_error: {type(v).__name__}: {str(e)}>"
+            
+            return result
+        except RedisError as e:
+            return f"Error getting all fields from hash '{name}': {str(e)}"
+    except RedisError as e:
+        return f"Error getting all fields from hash '{name}': {str(e)}"
     except RedisError as e:
         return f"Error getting all fields from hash '{name}': {str(e)}"
 
@@ -144,15 +188,19 @@ async def get_vector_from_hash(name: str, vector_field: str = "vector", host_id:
         The vector as a list of floats, or an error message if retrieval fails.
     """
     try:
+        # For vector retrieval, we always need binary data, so use decode_responses=False
         r = RedisConnectionManager.get_connection(host_id, decode_responses=False)
 
         # Retrieve the binary blob stored in the hash
         binary_blob = r.hget(name, vector_field)
 
         if binary_blob:
-            # Convert the binary blob back to a NumPy array (assuming it's stored as float32)
-            vector_array = np.frombuffer(binary_blob, dtype=np.float32)
-            return vector_array.tolist()
+            try:
+                # Convert the binary blob back to a NumPy array (assuming it's stored as float32)
+                vector_array = np.frombuffer(binary_blob, dtype=np.float32)
+                return vector_array.tolist()
+            except Exception as e:
+                return f"Error decoding vector data from field '{vector_field}' in hash '{name}': {str(e)}"
         else:
             return f"Field '{vector_field}' not found in hash '{name}'."
 

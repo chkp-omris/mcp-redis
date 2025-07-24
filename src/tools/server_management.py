@@ -4,7 +4,7 @@ from redis.exceptions import RedisError
 from src.common.server import mcp
 
 @mcp.tool()
-async def dbsize(host_id: Optional[str] = None) -> int:
+async def dbsize(host_id: Optional[str] = None) -> str | int:
     """Get the number of keys stored in the Redis database
     
     Args:
@@ -15,7 +15,29 @@ async def dbsize(host_id: Optional[str] = None) -> int:
     """
     try:
         r = RedisConnectionManager.get_connection(host_id)
-        return r.dbsize()
+        
+        # Check if we're in cluster mode
+        pool = RedisConnectionManager.get_pool()
+        connection_details = pool.get_connection_details(host_id)
+        is_cluster = connection_details.get("cluster_mode", False)
+        
+        if is_cluster:
+            # For cluster mode, sum dbsize across all nodes
+            total_keys = 0
+            try:
+                for node in r.get_nodes():
+                    try:
+                        node_size = node.dbsize()
+                        total_keys += node_size
+                    except Exception as e:
+                        # If a specific node fails, continue with others
+                        continue
+                return total_keys
+            except Exception as e:
+                return f"Error getting cluster database size: {str(e)}"
+        else:
+            # For standalone mode
+            return r.dbsize()
     except RedisError as e:
         return f"Error getting database size: {str(e)}"
 

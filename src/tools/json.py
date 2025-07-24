@@ -32,7 +32,7 @@ async def json_set(name: str, path: str, value: JsonType, expire_seconds: int = 
 
 
 @mcp.tool()
-async def json_get(name: str, path: str = '$') -> str:
+async def json_get(name: str, path: str = '$') -> str | Optional[List[JsonType]]:
     """Retrieve a JSON value from Redis at a given path.
 
     Args:
