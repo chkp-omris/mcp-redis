@@ -1,8 +1,16 @@
-from typing import Optional, List
+from typing import Union, Mapping, Optional, List, TYPE_CHECKING
 from src.common.connection import RedisConnectionManager
 from redis.exceptions import RedisError
 from src.common.server import mcp
-from redis.commands.json._util import JsonType
+# Define JsonType for type checking to match redis-py definition
+# Use object as runtime type to avoid issubclass() issues with Any in Python 3.10
+if TYPE_CHECKING:
+    JsonType = Union[
+        str, int, float, bool, None, Mapping[str, "JsonType"], List["JsonType"]
+    ]
+else:
+    # Use object at runtime to avoid MCP framework issubclass() issues
+    JsonType = object
 
 
 @mcp.tool()
