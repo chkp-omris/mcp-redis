@@ -1,6 +1,7 @@
 from typing import Optional
 from src.common.connection import RedisConnectionManager
 from src.common.server import mcp
+from redis.exceptions import RedisError
 
 
 @mcp.tool()

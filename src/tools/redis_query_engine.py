@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Optional, List, Union, Dict, Any
 from src.common.connection import RedisConnectionManager
 from redis.exceptions import RedisError
 from src.common.server import mcp
@@ -8,6 +8,7 @@ from redis.commands.search.field import VectorField
 from redis.commands.search.index_definition import IndexDefinition
 from redis.commands.search.query import Query
 from redis.exceptions import RedisError
+import numpy as np
 
 from src.common.connection import RedisConnectionManager
 from src.common.server import mcp
