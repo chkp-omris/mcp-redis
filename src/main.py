@@ -8,20 +8,7 @@ from src.common.config import build_redis_config
 from src.common.connection import RedisConnectionPool
 from src.common.stdio_server import serve_stdio
 from src.common.streaming_server import serve_streaming
-import src.tools.server_management
-import src.tools.misc
-import src.tools.redis_query_engine
-import src.tools.hash
-import src.tools.list
-import src.tools.string
-import src.tools.json
-import src.tools.sorted_set
-import src.tools.set
-import src.tools.stream
-import src.tools.pub_sub
-import src.tools.connection_management
 
-from src.common.config import parse_redis_uri, set_redis_config_from_cli
 from src.common.server import mcp
 from src.common.logging_utils import configure_logging
 
