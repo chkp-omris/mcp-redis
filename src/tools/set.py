@@ -1,11 +1,10 @@
 from typing import Optional
 from src.common.connection import RedisConnectionManager
-from redis.exceptions import RedisError
 from src.common.server import mcp
 
 
 @mcp.tool()
-async def sadd(name: str, value: str, expire_seconds: int = None, host_id: Optional[str] = None) -> str:
+async def sadd(name: str, value: str, expire_seconds: Optional[int] = None, host_id: Optional[str] = None) -> str:
     """Add a value to a Redis set with an optional expiration time.
 
     Args:
@@ -25,7 +24,8 @@ async def sadd(name: str, value: str, expire_seconds: int = None, host_id: Optio
             r.expire(name, expire_seconds)
 
         return f"Value '{value}' added successfully to set '{name}'." + (
-            f" Expires in {expire_seconds} seconds." if expire_seconds else "")
+            f" Expires in {expire_seconds} seconds." if expire_seconds else ""
+        )
     except RedisError as e:
         return f"Error adding value '{value}' to set '{name}': {str(e)}"
 
@@ -45,13 +45,17 @@ async def srem(name: str, value: str, host_id: Optional[str] = None) -> str:
     try:
         r = RedisConnectionManager.get_connection(host_id)
         removed = r.srem(name, value)
-        return f"Value '{value}' removed from set '{name}'." if removed else f"Value '{value}' not found in set '{name}'."
+        return (
+            f"Value '{value}' removed from set '{name}'."
+            if removed
+            else f"Value '{value}' not found in set '{name}'."
+        )
     except RedisError as e:
         return f"Error removing value '{value}' from set '{name}': {str(e)}"
 
 
 @mcp.tool()
-async def smembers(name: str, host_id: Optional[str] = None) -> list:
+async def smembers(name: str, host_id: Optional[str] = None) -> Union[str, List[str]]:
     """Get all members of a Redis set.
 
     Args:
@@ -67,4 +71,3 @@ async def smembers(name: str, host_id: Optional[str] = None) -> list:
         return list(members) if members else f"Set '{name}' is empty or does not exist."
     except RedisError as e:
         return f"Error retrieving members of set '{name}': {str(e)}"
-

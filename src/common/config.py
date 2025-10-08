@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 import os
 import urllib.parse
 
+from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -58,47 +60,47 @@ def parse_redis_uri(uri: str) -> dict:
     config = {}
 
     # Scheme determines SSL
-    if parsed.scheme == 'rediss':
-        config['ssl'] = True
-    elif parsed.scheme == 'redis':
-        config['ssl'] = False
+    if parsed.scheme == "rediss":
+        config["ssl"] = True
+    elif parsed.scheme == "redis":
+        config["ssl"] = False
     else:
         raise ValueError(f"Unsupported scheme: {parsed.scheme}")
 
     # Host and port
-    config['host'] = parsed.hostname or '127.0.0.1'
-    config['port'] = parsed.port or 6379
+    config["host"] = parsed.hostname or "127.0.0.1"
+    config["port"] = parsed.port or 6379
 
     # Database
-    if parsed.path and parsed.path != '/':
+    if parsed.path and parsed.path != "/":
         try:
-            config['db'] = int(parsed.path.lstrip('/'))
+            config["db"] = int(parsed.path.lstrip("/"))
         except ValueError:
-            config['db'] = 0
+            config["db"] = 0
     else:
-        config['db'] = 0
+        config["db"] = 0
 
     # Authentication
     if parsed.username:
-        config['username'] = parsed.username
+        config["username"] = parsed.username
     if parsed.password:
-        config['password'] = parsed.password
+        config["password"] = parsed.password
 
     # Parse query parameters for SSL and other options
     if parsed.query:
         query_params = urllib.parse.parse_qs(parsed.query)
 
         # Handle SSL parameters
-        if 'ssl_cert_reqs' in query_params:
-            config['ssl_cert_reqs'] = query_params['ssl_cert_reqs'][0]
-        if 'ssl_ca_certs' in query_params:
-            config['ssl_ca_certs'] = query_params['ssl_ca_certs'][0]
-        if 'ssl_ca_path' in query_params:
-            config['ssl_ca_path'] = query_params['ssl_ca_path'][0]
-        if 'ssl_keyfile' in query_params:
-            config['ssl_keyfile'] = query_params['ssl_keyfile'][0]
-        if 'ssl_certfile' in query_params:
-            config['ssl_certfile'] = query_params['ssl_certfile'][0]
+        if "ssl_cert_reqs" in query_params:
+            config["ssl_cert_reqs"] = query_params["ssl_cert_reqs"][0]
+        if "ssl_ca_certs" in query_params:
+            config["ssl_ca_certs"] = query_params["ssl_ca_certs"][0]
+        if "ssl_ca_path" in query_params:
+            config["ssl_ca_path"] = query_params["ssl_ca_path"][0]
+        if "ssl_keyfile" in query_params:
+            config["ssl_keyfile"] = query_params["ssl_keyfile"][0]
+        if "ssl_certfile" in query_params:
+            config["ssl_certfile"] = query_params["ssl_certfile"][0]
 
         # Handle other parameters. According to https://www.iana.org/assignments/uri-schemes/prov/redis,
         # The database number to use for the Redis SELECT command comes from
@@ -106,9 +108,9 @@ def parse_redis_uri(uri: str) -> dict:
         #   section) or the value from the key-value pair from the "query" URI
         #   field with the key "db".  If neither of these are present, the
         #   default database number is 0.
-        if 'db' in query_params:
+        if "db" in query_params:
             try:
-                config['db'] = int(query_params['db'][0])
+                config["db"] = int(query_params["db"][0])
             except ValueError:
                 pass
 

@@ -1,12 +1,15 @@
 import json
-from typing import Optional
-from src.common.connection import RedisConnectionManager
+from typing import Union, List, Optional
+
 from redis.exceptions import RedisError
-from src.common.server import mcp
 from redis.typing import FieldT
 
+from src.common.connection import RedisConnectionManager
+from src.common.server import mcp
+
+
 @mcp.tool()
-async def lpush(name: str, value: FieldT, expire: int = None, host_id: Optional[str] = None) -> str:
+async def lpush(name: str, value: FieldT, expire: Optional[int] = None, host_id: Optional[str] = None) -> str:
     """Push a value onto the left of a Redis list and optionally set an expiration time.
     
     Args:
@@ -27,8 +30,9 @@ async def lpush(name: str, value: FieldT, expire: int = None, host_id: Optional[
     except RedisError as e:
         return f"Error pushing value to list '{name}': {str(e)}"
 
+
 @mcp.tool()
-async def rpush(name: str, value: FieldT, expire: int = None, host_id: Optional[str] = None) -> str:
+async def rpush(name: str, value: FieldT, expire: Optional[int] = None, host_id: Optional[str] = None) -> str:
     """Push a value onto the right of a Redis list and optionally set an expiration time.
     
     Args:
@@ -49,6 +53,7 @@ async def rpush(name: str, value: FieldT, expire: int = None, host_id: Optional[
     except RedisError as e:
         return f"Error pushing value to list '{name}': {str(e)}"
 
+
 @mcp.tool()
 async def lpop(name: str, host_id: Optional[str] = None) -> str:
     """Remove and return the first element from a Redis list.
@@ -66,6 +71,7 @@ async def lpop(name: str, host_id: Optional[str] = None) -> str:
         return value if value else f"List '{name}' is empty or does not exist."
     except RedisError as e:
         return f"Error popping value from list '{name}': {str(e)}"
+
 
 @mcp.tool()
 async def rpop(name: str, host_id: Optional[str] = None) -> str:
@@ -85,8 +91,9 @@ async def rpop(name: str, host_id: Optional[str] = None) -> str:
     except RedisError as e:
         return f"Error popping value from list '{name}': {str(e)}"
 
+
 @mcp.tool()
-async def lrange(name: str, start: int, stop: int, host_id: Optional[str] = None) -> list:
+async def lrange(name: str, start: int, stop: int, host_id: Optional[str] = None) -> Union[str, List[str]]:
     """Get elements from a Redis list within a specific range.
 
     Args:
@@ -96,7 +103,7 @@ async def lrange(name: str, start: int, stop: int, host_id: Optional[str] = None
         host_id (str, optional): Redis host identifier. If not provided, uses the default connection.
 
     Returns:
-        A JSON string containing the list of elements or an error message.
+    str: A JSON string containing the list of elements or an error message.
     """
     try:
         r = RedisConnectionManager.get_connection(host_id)
@@ -107,6 +114,7 @@ async def lrange(name: str, start: int, stop: int, host_id: Optional[str] = None
             return json.dumps(values)
     except RedisError as e:
         return f"Error retrieving values from list '{name}': {str(e)}"
+
 
 @mcp.tool()
 async def llen(name: str, host_id: Optional[str] = None) -> int:

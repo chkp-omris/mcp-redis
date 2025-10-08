@@ -1,12 +1,12 @@
-from typing import Optional
-from src.common.connection import RedisConnectionManager
-from redis.exceptions import RedisError
-from src.common.server import mcp
+from typing import List, Union, Optional
 import numpy as np
+from redis.exceptions import RedisError
+from src.common.connection import RedisConnectionManager
+from src.common.server import mcp
 
 
 @mcp.tool()
-async def hset(name: str, key: str, value: str | int | float, expire_seconds: int = None, host_id: Optional[str] = None) -> str:
+async def hset(name: str, key: str, value: str | int | float, expire_seconds: Optional[int] = None, host_id: Optional[str] = None) -> str:
     """Set a field in a hash stored at key with an optional expiration time.
 
     Args:
@@ -27,9 +27,11 @@ async def hset(name: str, key: str, value: str | int | float, expire_seconds: in
             r.expire(name, expire_seconds)
 
         return f"Field '{key}' set successfully in hash '{name}'." + (
-            f" Expires in {expire_seconds} seconds." if expire_seconds else "")
+            f" Expires in {expire_seconds} seconds." if expire_seconds else ""
+        )
     except RedisError as e:
         return f"Error setting field '{key}' in hash '{name}': {str(e)}"
+
 
 @mcp.tool()
 async def hget(name: str, key: str, host_id: Optional[str] = None) -> str:
@@ -50,6 +52,7 @@ async def hget(name: str, key: str, host_id: Optional[str] = None) -> str:
     except RedisError as e:
         return f"Error getting field '{key}' from hash '{name}': {str(e)}"
 
+
 @mcp.tool()
 async def hdel(name: str, key: str, host_id: Optional[str] = None) -> str:
     """Delete a field from a Redis hash.
@@ -65,9 +68,14 @@ async def hdel(name: str, key: str, host_id: Optional[str] = None) -> str:
     try:
         r = RedisConnectionManager.get_connection(host_id)
         deleted = r.hdel(name, key)
-        return f"Field '{key}' deleted from hash '{name}'." if deleted else f"Field '{key}' not found in hash '{name}'."
+        return (
+            f"Field '{key}' deleted from hash '{name}'."
+            if deleted
+            else f"Field '{key}' not found in hash '{name}'."
+        )
     except RedisError as e:
         return f"Error deleting field '{key}' from hash '{name}': {str(e)}"
+
 
 @mcp.tool()
 async def hgetall(name: str, host_id: Optional[str] = None) -> dict:
@@ -83,9 +91,14 @@ async def hgetall(name: str, host_id: Optional[str] = None) -> dict:
     try:
         r = RedisConnectionManager.get_connection(host_id)
         hash_data = r.hgetall(name)
-        return {k: v for k, v in hash_data.items()} if hash_data else f"Hash '{name}' is empty or does not exist."
+        return (
+            {k: v for k, v in hash_data.items()}
+            if hash_data
+            else f"Hash '{name}' is empty or does not exist."
+        )
     except RedisError as e:
         return f"Error getting all fields from hash '{name}': {str(e)}"
+
 
 @mcp.tool()
 async def hexists(name: str, key: str, host_id: Optional[str] = None) -> bool:
@@ -105,8 +118,9 @@ async def hexists(name: str, key: str, host_id: Optional[str] = None) -> bool:
     except RedisError as e:
         return f"Error checking existence of field '{key}' in hash '{name}': {str(e)}"
 
+
 @mcp.tool()
-async def set_vector_in_hash(name: str, vector: list, vector_field: str = "vector", host_id: Optional[str] = None) -> bool:
+async def set_vector_in_hash(name: str, vector: List[float], vector_field: str = "vector", host_id: Optional[str] = None) -> Union[bool, str]:
     """Store a vector as a field in a Redis hash.
 
     Args:

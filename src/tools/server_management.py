@@ -1,7 +1,7 @@
 from typing import Optional
 from src.common.connection import RedisConnectionManager
-from redis.exceptions import RedisError
 from src.common.server import mcp
+
 
 @mcp.tool()
 async def dbsize(host_id: Optional[str] = None) -> str | int:

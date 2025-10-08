@@ -1,8 +1,19 @@
 # Redis MCP Server
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.13%2B-blue)](https://www.python.org/downloads/)
+[![Integration](https://github.com/redis/mcp-redis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/redis/mcp-redis/actions/workflows/ci.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/redis-mcp-server)](https://pypi.org/project/redis-mcp-server/)
+[![Python Version](https://img.shields.io/badge/python-3.13%2B-blue&logo=redis)](https://www.python.org/downloads/)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE.txt)
 [![smithery badge](https://smithery.ai/badge/@redis/mcp-redis)](https://smithery.ai/server/@redis/mcp-redis)
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/70102150-efe0-4705-9f7d-87980109a279)
+[![Docker Image Version](https://img.shields.io/docker/v/mcp/redis?sort=semver&logo=docker&label=Docker)](https://hub.docker.com/r/mcp/redis)
+[![codecov](https://codecov.io/gh/redis/mcp-redis/branch/master/graph/badge.svg?token=yenl5fzxxr)](https://codecov.io/gh/redis/mcp-redis)
+
+
+[![Discord](https://img.shields.io/discord/697882427875393627.svg?style=social&logo=discord)](https://discord.gg/redis)
+[![Twitch](https://img.shields.io/twitch/status/redisinc?style=social)](https://www.twitch.tv/redisinc)
+[![YouTube](https://img.shields.io/youtube/channel/views/UCD78lHSwYqMlyetR0_P4Vig?style=social)](https://www.youtube.com/redisinc)
+[![Twitter](https://img.shields.io/twitter/follow/redisinc?style=social)](https://twitter.com/redisinc)
+[![Stack Exchange questions](https://img.shields.io/stackexchange/stackoverflow/t/mcp-redis?style=social&logo=stackoverflow&label=Stackoverflow)](https://stackoverflow.com/questions/tagged/mcp-redis)
 
 ## Overview
 The Redis MCP Server is a **natural language interface** designed for agentic applications to efficiently manage and search data in Redis. It integrates seamlessly with **MCP (Model Content Protocol) clients**, enabling AI-driven workflows to interact with structured and unstructured data in Redis. Using this MCP Server, you can ask questions like:
@@ -17,13 +28,16 @@ The Redis MCP Server is a **natural language interface** designed for agentic ap
 - [Features](#features)
 - [Tools](#tools)
 - [Installation](#installation)
-  - [Quick Start with uvx](#quick-start-with-uvx)
+  - [From PyPI (recommended)](#from-pypi-recommended)
+  - [Testing the PyPI package](#testing-the-pypi-package)
+  - [From GitHub](#from-github)
   - [Development Installation](#development-installation)
   - [With Docker](#with-docker)
 - [Configuration](#configuration)
   - [Redis ACL](#redis-acl)
   - [Configuration via command line arguments](#configuration-via-command-line-arguments)
   - [Configuration via Environment Variables](#configuration-via-environment-variables)
+  - [Logging](#logging)
 - [Integrations](#integrations)
   - [OpenAI Agents SDK](#openai-agents-sdk)
   - [Augment](#augment)
@@ -43,6 +57,7 @@ The Redis MCP Server is a **natural language interface** designed for agentic ap
 - **Full Redis Support**: Handles **hashes, lists, sets, sorted sets, streams**, and more.
 - **Search & Filtering**: Supports efficient data retrieval and searching in Redis.
 - **Scalable & Lightweight**: Designed for **high-performance** data operations.
+- The Redis MCP Server supports the `stdio` [transport](https://modelcontextprotocol.io/docs/concepts/transports#standard-input%2Foutput-stdio). Support to the `stremable-http` transport will be added in the future.
 
 ## Tools
 
@@ -64,13 +79,56 @@ Additional tools.
 
 ## Installation
 
-The Redis MCP Server supports both `stdio` and `streamable-http` [transports](https://modelcontextprotocol.io/docs/concepts/transports).
+The Redis MCP Server is available as a PyPI package and as direct installation from the GitHub repository.
 
-> No PyPi package is available at the moment.
+### From PyPI (recommended)
+Configuring the latest Redis MCP Server version from PyPI, as an example, can be done importing the following JSON configuration in the desired framework or tool.
+The `uvx` command will download the server on the fly (if not cached already), create a temporary environment, and then run it.
 
-### Quick Start with uvx 
+```commandline
+{
+  "mcpServers": {
+    "RedisMCPServer": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "redis-mcp-server@latest",
+        "redis-mcp-server",
+        "--url",
+        "\"redis://localhost:6379/0\""
+      ]
+    }
+  }
+}
+```
 
-The easiest way to use the Redis MCP Server is with `uvx`, which allows you to run it directly from GitHub (from a branch, or use a tagged release). It is recommended to use a tagged release, the `main` branch is under active development and may contain breaking changes. As an example, you can execute the following command to run the `0.2.0` release:
+You will find examples for different platforms along the README.
+
+### Testing the PyPI package
+
+You can install the package as follows:
+
+```sh
+pip install redis-mcp-server
+```
+
+And start it using `uv` the package in your environment.
+
+```sh
+uv python install 3.13
+uv sync
+uv run redis-mcp-server --url redis://localhost:6379/0
+```
+
+However, starting the MCP Server is most useful when delegate to the framework or tool where this MCP Server is configured.
+
+### From GitHub
+
+You can configure the desired Redis MCP Server version with `uvx`, which allows you to run it directly from GitHub (from a branch, or use a tagged release).
+
+> It is recommended to use a tagged release, the `main` branch is under active development and may contain breaking changes.
+
+As an example, you can execute the following command to run the `0.2.0` release:
 
 ```commandline
 uvx --from git+https://github.com/redis/mcp-redis.git@0.2.0 redis-mcp-server --url redis://localhost:6379/0
@@ -83,7 +141,7 @@ Additional examples are provided below.
 # Run with Redis URI
 uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server --url redis://localhost:6379/0
 
-# Run with Redis URI and SSL 
+# Run with Redis URI and SSL
 uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server --url "rediss://<USERNAME>:<PASSWORD>@<HOST>:<PORT>?ssl_cert_reqs=required&ssl_ca_certs=<PATH_TO_CERT>"
 
 # Run with individual parameters
@@ -229,21 +287,21 @@ When using the CLI interface, you can configure the server with command line arg
 
 ```sh
 # Basic Redis connection
-uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server \
+uvx --from redis-mcp-server@latest redis-mcp-server \
   --host localhost \
   --port 6379 \
   --password mypassword
 
 # Using Redis URI (simpler)
-uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server \
+uvx --from redis-mcp-server@latest redis-mcp-server \
   --url redis://user:pass@localhost:6379/0
 
 # SSL connection
-uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server \
+uvx --from redis-mcp-server@latest redis-mcp-server \
   --url rediss://user:pass@redis.example.com:6379/0
 
 # See all available options
-uvx --from git+https://github.com/redis/mcp-redis.git redis-mcp-server --help
+uvx --from redis-mcp-server@latest redis-mcp-server --help
 ```
 
 **Available CLI Options:**
@@ -283,7 +341,7 @@ If desired, you can use environment variables. Defaults are provided for all var
 
 There are several ways to set environment variables:
 
-1. **Using a `.env` File**:  
+1. **Using a `.env` File**:
 Place a `.env` file in your project directory with key-value pairs for each environment variable. Tools like `python-dotenv`, `pipenv`, and `uv` can automatically load these variables when running your application. This is a convenient and secure way to manage configuration, as it keeps sensitive data out of your shell history and version control (if `.env` is in `.gitignore`).
 For example, create a `.env` file with the following content from the `.env.example` file provided in the repository:
 
@@ -295,7 +353,7 @@ Then edit the `.env` file to set your Redis configuration:
 
 OR,
 
-2. **Setting Variables in the Shell**:  
+2. **Setting Variables in the Shell**:
 You can export environment variables directly in your shell before running your application. For example:
 
 ```sh
@@ -305,6 +363,46 @@ export REDIS_PORT=6379
 ```
 
 This method is useful for temporary overrides or quick testing.
+
+
+### Logging
+
+The server uses Python's standard logging and is configured at startup. By default it logs at WARNING and above. You can change verbosity with the `MCP_REDIS_LOG_LEVEL` environment variable.
+
+- Accepted values (case-insensitive): `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, `NOTSET`
+- Aliases supported: `WARN` → `WARNING`, `FATAL` → `CRITICAL`
+- Numeric values are also accepted, including signed (e.g., `"10"`, `"+20"`)
+- Default when unset or unrecognized: `WARNING`
+
+Handler behavior
+- If the host (e.g., `uv`, VS Code, pytest) already installed console handlers, the server will NOT add its own; it only lowers overly-restrictive handler thresholds so your chosen level is not filtered out. It will never raise a handler's threshold.
+- If no handlers are present, the server adds a single stderr StreamHandler with a simple format.
+
+Examples
+```bash
+# See normal lifecycle messages
+MCP_REDIS_LOG_LEVEL=INFO uv run src/main.py
+
+# Very verbose for debugging
+MCP_REDIS_LOG_LEVEL=DEBUG uvx --from redis-mcp-server@latest redis-mcp-server --url redis://localhost:6379/0
+```
+
+In MCP client configs that support env, add it alongside your Redis settings. For example:
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "uvx",
+      "args": ["--from", "redis-mcp-server@latest", "redis-mcp-server", "--url", "redis://localhost:6379/0"],
+      "env": {
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "MCP_REDIS_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
 
 
 ## Integrations
@@ -337,7 +435,9 @@ You can troubleshoot your agent workflows using the [OpenAI dashboard](https://p
 
 ### Augment
 
-You can configure the Redis MCP Server in Augment by importing the server via JSON:
+The preferred way of configuring the Redis MCP Server in Augment is to use the [Easy MCP](https://docs.augmentcode.com/setup-augment/mcp#redis) feature.
+
+You can also configure the Redis MCP Server in Augment manually by importing the server via JSON:
 
 ```json
 {
@@ -346,7 +446,7 @@ You can configure the Redis MCP Server in Augment by importing the server via JS
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/redis/mcp-redis.git",
+        "redis-mcp-server@latest",
         "redis-mcp-server",
         "--url",
         "redis://localhost:6379/0"
@@ -362,17 +462,17 @@ The simplest way to configure MCP clients is using `uvx`. Add the following JSON
 
 ```json
 {
-    "mcpServers": {
-        "redis-mcp-server": {
-            "type": "stdio",
-            "command": "/Users/mortensi/.local/bin/uvx",
-            "args": [
-                "--from", "git+https://github.com/redis/mcp-redis.git",
-                "redis-mcp-server",
-                "--url", "redis://localhost:6379/0"
-            ]
-        }
+  "mcpServers": {
+    "redis-mcp-server": {
+        "type": "stdio",
+        "command": "/Users/mortensi/.local/bin/uvx",
+        "args": [
+            "--from", "redis-mcp-server@latest",
+            "redis-mcp-server",
+            "--url", "redis://localhost:6379/0"
+        ]
     }
+  }
 }
 ```
 
@@ -395,25 +495,23 @@ To use the Redis MCP Server with VS Code, you must enable the [agent mode](https
 }
 ```
 
-You can start the GitHub desired version of the Redis MCP server using `uvx` by adding the following JSON to your `settings.json`:
+You can start the GitHub desired version of the Redis MCP server using `uvx` by adding the following JSON to your `mcp.json` file:
 
 ```json
-"mcp": {
-    "servers": {
-        "Redis MCP Server": {
-        "type": "stdio",
-        "command": "uvx", 
-        "args": [
-            "--from", "git+https://github.com/redis/mcp-redis.git",
-            "redis-mcp-server",
-            "--url", "redis://localhost:6379/0"
-        ]
-        },
-    }
-},
+"servers": {
+  "Redis MCP Server": {
+    "type": "stdio",
+    "command": "uvx", 
+    "args": [
+      "--from", "redis-mcp-server@latest",
+      "redis-mcp-server",
+      "--url", "redis://localhost:6379/0"
+    ]
+  },
+}
 ```
 
-Alternatively, you can start the server using `uv` and configure your `mcp.json` or `settings.json`. This is usually desired for development.
+Alternatively, you can start the server using `uv` and configure your `mcp.json`. This is usually desired for development.
 
 ```json
 {
@@ -438,33 +536,10 @@ Alternatively, you can start the server using `uv` and configure your `mcp.json`
 }
 ```
 
-```json
-{
-  "mcp": {
-    "servers": {
-      "redis": {
-        "type": "stdio",
-        "command": "<full_path_uv_command>",
-        "args": [
-          "--directory",
-          "<your_mcp_server_directory>",
-          "run",
-          "src/main.py"
-        ],
-        "env": {
-          "REDIS_HOST": "<your_redis_database_hostname>",
-          "REDIS_PORT": "<your_redis_database_port>",
-          "REDIS_USERNAME": "<your_redis_database_username>",
-          "REDIS_PWD": "<your_redis_database_password>",
-        }
-      }
-    }
-  }
-}
-```
-
 For more information, see the [VS Code documentation](https://code.visualstudio.com/docs/copilot/chat/mcp-servers).
 
+> **Note:** Starting with [VS Code v1.102](https://code.visualstudio.com/updates/v1_102),  
+> MCP servers are now stored in a dedicated `mcp.json` file instead of `settings.json`. 
 
 ## Testing
 

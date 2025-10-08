@@ -1,4 +1,6 @@
 import sys
+import logging
+
 import click
 import asyncio
 
@@ -19,28 +21,60 @@ import src.tools.stream
 import src.tools.pub_sub
 import src.tools.connection_management
 
+from src.common.config import parse_redis_uri, set_redis_config_from_cli
+from src.common.server import mcp
+from src.common.logging_utils import configure_logging
+
+
+class RedisMCPServer:
+    def __init__(self):
+        # Configure logging on server initialization (idempotent)
+        configure_logging()
+        self._logger = logging.getLogger(__name__)
+        self._logger.info("Starting the Redis MCP Server")
+
+    def run(self):
+        mcp.run()
+
 
 @click.command()
 @click.option('--transport', default='stdio', type=click.Choice(['stdio', 'streamable-http']), 
               help='Transport method (stdio or streamable-http)')
 @click.option('--http-host', default='127.0.0.1', help='HTTP server host (for streamable-http transport)')
 @click.option('--http-port', default=8000, type=int, help='HTTP server port (for streamable-http transport)')
-@click.option('--url', help='Redis connection URI (redis://user:pass@host:port/db or rediss:// for SSL)')
-@click.option('--host', default='127.0.0.1', help='Redis host')
-@click.option('--port', default=6379, type=int, help='Redis port')
-@click.option('--db', default=0, type=int, help='Redis database number')
-@click.option('--username', help='Redis username')
-@click.option('--password', help='Redis password')
-@click.option('--ssl', is_flag=True, help='Use SSL connection')
-@click.option('--ssl-ca-path', help='Path to CA certificate file')
-@click.option('--ssl-keyfile', help='Path to SSL key file')
-@click.option('--ssl-certfile', help='Path to SSL certificate file')
-@click.option('--ssl-cert-reqs', default='required', help='SSL certificate requirements')
-@click.option('--ssl-ca-certs', help='Path to CA certificates file')
-@click.option('--cluster-mode', is_flag=True, help='Enable Redis cluster mode')
-def cli(transport, http_host, http_port, url, host, port, db, username, password,
-        ssl, ssl_ca_path, ssl_keyfile, ssl_certfile,
-        ssl_cert_reqs, ssl_ca_certs, cluster_mode):
+@click.option(
+    "--url",
+    help="Redis connection URI (redis://user:pass@host:port/db or rediss:// for SSL)",
+)
+@click.option("--host", default="127.0.0.1", help="Redis host")
+@click.option("--port", default=6379, type=int, help="Redis port")
+@click.option("--db", default=0, type=int, help="Redis database number")
+@click.option("--username", help="Redis username")
+@click.option("--password", help="Redis password")
+@click.option("--ssl", is_flag=True, help="Use SSL connection")
+@click.option("--ssl-ca-path", help="Path to CA certificate file")
+@click.option("--ssl-keyfile", help="Path to SSL key file")
+@click.option("--ssl-certfile", help="Path to SSL certificate file")
+@click.option(
+    "--ssl-cert-reqs", default="required", help="SSL certificate requirements"
+)
+@click.option("--ssl-ca-certs", help="Path to CA certificates file")
+@click.option("--cluster-mode", is_flag=True, help="Enable Redis cluster mode")
+def cli(transport, http_host, http_port, 
+    url,
+    host,
+    port,
+    db,
+    username,
+    password,
+    ssl,
+    ssl_ca_path,
+    ssl_keyfile,
+    ssl_certfile,
+    ssl_cert_reqs,
+    ssl_ca_certs,
+    cluster_mode,
+):
     """Redis MCP Server - Model Context Protocol server for Redis."""
     
     try:

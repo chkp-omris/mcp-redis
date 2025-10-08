@@ -1,4 +1,5 @@
 import sys
+import logging
 import urllib.parse
 from typing import Dict, Optional, Type, Union, Any
 from enum import Enum
@@ -6,6 +7,8 @@ from src.version import __version__
 import redis
 from redis import Redis
 from redis.cluster import RedisCluster, ClusterNode
+
+_logger = logging.getLogger(__name__)
 
 
 def detect_cluster_mode(config: dict) -> bool:
@@ -173,19 +176,26 @@ class RedisConnectionPool:
             return f"Successfully connected to Redis at {host_id} (both decoded and raw modes, {cluster_status})"
             
         except redis.exceptions.ConnectionError as e:
-            raise Exception(f"Failed to connect to Redis server at {host_id}: {e}")
+            _logger.error(f"Failed to connect to Redis server at {host_id}: {e}")
+            raise
         except redis.exceptions.AuthenticationError as e:
-            raise Exception(f"Authentication failed for Redis server at {host_id}: {e}")
+            _logger.error(f"Authentication failed for Redis server at {host_id}: {e}")
+            raise
         except redis.exceptions.TimeoutError as e:
-            raise Exception(f"Connection timed out for Redis server at {host_id}: {e}")
+            _logger.error(f"Connection timed out for Redis server at {host_id}: {e}")
+            raise
         except redis.exceptions.ResponseError as e:
-            raise Exception(f"Response error for Redis server at {host_id}: {e}")
+            _logger.error(f"Response error for Redis server at {host_id}: {e}")
+            raise
         except redis.exceptions.RedisError as e:
-            raise Exception(f"Redis error for server at {host_id}: {e}")
+            _logger.error(f"Redis error for server at {host_id}: {e}")
+            raise
         except redis.exceptions.ClusterError as e:
-            raise Exception(f"Redis Cluster error for server at {host_id}: {e}")
+            _logger.error(f"Redis Cluster error for server at {host_id}: {e}")
+            raise
         except Exception as e:
-            raise Exception(f"Unexpected error connecting to Redis server at {host_id}: {e}")
+            _logger.error(f"Unexpected error connecting to Redis server at {host_id}: {e}")
+            raise
     
     def get_connection(self, host_id: Optional[str] = None, decode_responses: bool = True) -> Redis:
         """Get a Redis connection by host identifier."""

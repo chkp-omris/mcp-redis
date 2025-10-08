@@ -1,10 +1,15 @@
-from src.common.connection import RedisConnectionManager
+from typing import Optional
+
 from redis.exceptions import RedisError
+
+from src.common.connection import RedisConnectionManager
 from src.common.server import mcp
 
 
 @mcp.tool()
-async def zadd(key: str, score: float, member: str, expiration: int = None) -> str:
+async def zadd(
+    key: str, score: float, member: str, expiration: Optional[int] = None
+) -> str:
     """Add a member to a Redis sorted set with an optional expiration time.
 
     Args:
@@ -21,8 +26,9 @@ async def zadd(key: str, score: float, member: str, expiration: int = None) -> s
         r.zadd(key, {member: score})
         if expiration:
             r.expire(key, expiration)
-        return f"Successfully added {member} to {key} with score {score}" + \
-            (f" and expiration {expiration} seconds" if expiration else "")
+        return f"Successfully added {member} to {key} with score {score}" + (
+            f" and expiration {expiration} seconds" if expiration else ""
+        )
     except RedisError as e:
         return f"Error adding to sorted set {key}: {str(e)}"
 
@@ -43,7 +49,9 @@ async def zrange(key: str, start: int, end: int, with_scores: bool = False) -> s
     try:
         r = RedisConnectionManager.get_connection()
         members = r.zrange(key, start, end, withscores=with_scores)
-        return str(members) if members else f"Sorted set {key} is empty or does not exist"
+        return (
+            str(members) if members else f"Sorted set {key} is empty or does not exist"
+        )
     except RedisError as e:
         return f"Error retrieving sorted set {key}: {str(e)}"
 
@@ -62,6 +70,10 @@ async def zrem(key: str, member: str) -> str:
     try:
         r = RedisConnectionManager.get_connection()
         result = r.zrem(key, member)
-        return f"Successfully removed {member} from {key}" if result else f"Member {member} not found in {key}"
+        return (
+            f"Successfully removed {member} from {key}"
+            if result
+            else f"Member {member} not found in {key}"
+        )
     except RedisError as e:
         return f"Error removing from sorted set {key}: {str(e)}"

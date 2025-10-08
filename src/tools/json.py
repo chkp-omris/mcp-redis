@@ -1,20 +1,45 @@
-from typing import Union, Mapping, Optional, List, TYPE_CHECKING
-from src.common.connection import RedisConnectionManager
+import json
+from typing import Optional
 from redis.exceptions import RedisError
+from pydantic_core import core_schema
+
+from src.common.connection import RedisConnectionManager
 from src.common.server import mcp
-# Define JsonType for type checking to match redis-py definition
-# Use object as runtime type to avoid issubclass() issues with Any in Python 3.10
-if TYPE_CHECKING:
-    JsonType = Union[
-        str, int, float, bool, None, Mapping[str, "JsonType"], List["JsonType"]
-    ]
-else:
-    # Use object at runtime to avoid MCP framework issubclass() issues
-    JsonType = object
+
+
+# Custom type that accepts any JSON value but generates a proper schema
+class JsonValue:
+    """Accepts any JSON-serializable value."""
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        """Define how Pydantic should validate this type."""
+        # Accept any value
+        return core_schema.any_schema()
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, _core_schema, _handler):
+        """Define the JSON schema for this type."""
+        # Return a schema that accepts string, number, boolean, object, array, or null
+        return {
+            "anyOf": [
+                {"type": "string"},
+                {"type": "number"},
+                {"type": "boolean"},
+                {"type": "object"},
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "null"},
+            ]
+        }
 
 
 @mcp.tool()
-async def json_set(name: str, path: str, value: JsonType, expire_seconds: int = None) -> str:
+async def json_set(
+    name: str,
+    path: str,
+    value: JsonValue,
+    expire_seconds: Optional[int] = None,
+) -> str:
     """Set a JSON value in Redis at a given path with an optional expiration time.
 
     Args:
@@ -34,7 +59,8 @@ async def json_set(name: str, path: str, value: JsonType, expire_seconds: int = 
             r.expire(name, expire_seconds)
 
         return f"JSON value set at path '{path}' in '{name}'." + (
-            f" Expires in {expire_seconds} seconds." if expire_seconds else "")
+            f" Expires in {expire_seconds} seconds." if expire_seconds else ""
+        )
     except RedisError as e:
         return f"Error setting JSON value at path '{path}' in '{name}': {str(e)}"
 
@@ -53,13 +79,17 @@ async def json_get(name: str, path: str = '$') -> str | Optional[List[JsonType]]
     try:
         r = RedisConnectionManager.get_connection()
         value = r.json().get(name, path)
-        return value if value is not None else f"No data found at path '{path}' in '{name}'."
+        if value is not None:
+            # Convert the value to JSON string for consistent return type
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        else:
+            return f"No data found at path '{path}' in '{name}'."
     except RedisError as e:
         return f"Error retrieving JSON value at path '{path}' in '{name}': {str(e)}"
 
 
 @mcp.tool()
-async def json_del(name: str, path: str = '$') -> str:
+async def json_del(name: str, path: str = "$") -> str:
     """Delete a JSON value from Redis at a given path.
 
     Args:
@@ -72,7 +102,10 @@ async def json_del(name: str, path: str = '$') -> str:
     try:
         r = RedisConnectionManager.get_connection()
         deleted = r.json().delete(name, path)
-        return f"Deleted JSON value at path '{path}' in '{name}'." if deleted else f"No JSON value found at path '{path}' in '{name}'."
+        return (
+            f"Deleted JSON value at path '{path}' in '{name}'."
+            if deleted
+            else f"No JSON value found at path '{path}' in '{name}'."
+        )
     except RedisError as e:
         return f"Error deleting JSON value at path '{path}' in '{name}': {str(e)}"
-

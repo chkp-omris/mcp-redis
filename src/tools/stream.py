@@ -1,10 +1,15 @@
-from src.common.connection import RedisConnectionManager
+from typing import Dict, Any, Optional
+
 from redis.exceptions import RedisError
+
+from src.common.connection import RedisConnectionManager
 from src.common.server import mcp
 
 
 @mcp.tool()
-async def xadd(key: str, fields: dict, expiration: int = None) -> str:
+async def xadd(
+    key: str, fields: Dict[str, Any], expiration: Optional[int] = None
+) -> str:
     """Add an entry to a Redis stream with an optional expiration time.
 
     Args:
@@ -20,8 +25,9 @@ async def xadd(key: str, fields: dict, expiration: int = None) -> str:
         entry_id = r.xadd(key, fields)
         if expiration:
             r.expire(key, expiration)
-        return f"Successfully added entry {entry_id} to {key}" + \
-            (f" with expiration {expiration} seconds" if expiration else "")
+        return f"Successfully added entry {entry_id} to {key}" + (
+            f" with expiration {expiration} seconds" if expiration else ""
+        )
     except RedisError as e:
         return f"Error adding to stream {key}: {str(e)}"
 
@@ -59,6 +65,10 @@ async def xdel(key: str, entry_id: str) -> str:
     try:
         r = RedisConnectionManager.get_connection()
         result = r.xdel(key, entry_id)
-        return f"Successfully deleted entry {entry_id} from {key}" if result else f"Entry {entry_id} not found in {key}"
+        return (
+            f"Successfully deleted entry {entry_id} from {key}"
+            if result
+            else f"Entry {entry_id} not found in {key}"
+        )
     except RedisError as e:
         return f"Error deleting from stream {key}: {str(e)}"
