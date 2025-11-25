@@ -9,7 +9,7 @@ from src.common.connection import RedisConnectionPool
 from src.common.stdio_server import serve_stdio
 from src.common.streaming_server import serve_streaming
 
-from src.common.server import mcp
+from src.common.server import mcp, load_tools
 from src.common.logging_utils import configure_logging
 
 
@@ -47,6 +47,7 @@ class RedisMCPServer:
 )
 @click.option("--ssl-ca-certs", help="Path to CA certificates file")
 @click.option("--cluster-mode", is_flag=True, help="Enable Redis cluster mode")
+@click.option("--read-only", is_flag=True, help="Enable read-only mode (only allow read operations)")
 def cli(transport, http_host, http_port, 
     url,
     host,
@@ -61,8 +62,12 @@ def cli(transport, http_host, http_port,
     ssl_cert_reqs,
     ssl_ca_certs,
     cluster_mode,
+    read_only,
 ):
     """Redis MCP Server - Model Context Protocol server for Redis."""
+    
+    # Load tools with read-only mode setting
+    load_tools(read_only=read_only)
     
     try:
         # Build configuration using unified logic - URL takes precedence but individual params can override
