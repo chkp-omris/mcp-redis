@@ -1,6 +1,9 @@
 import importlib
+import logging
 import pkgutil
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger(__name__)
 
 # Read-only mode flag - set before loading tools
 read_only_mode = False
@@ -47,9 +50,14 @@ def load_tools(read_only: bool = False):
     for _, module_name, _ in pkgutil.iter_modules(tools_pkg.__path__):
         importlib.import_module(f"src.tools.{module_name}")
     
+    total_tools = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
+    logger.info(f"Loaded {total_tools} tools (read_only={read_only})")
+    
     # Filter out write tools if in read-only mode
     if read_only_mode:
         _filter_write_tools()
+        remaining_tools = len(mcp._tool_manager._tools) if hasattr(mcp, '_tool_manager') else 0
+        logger.info(f"Read-only mode: filtered to {remaining_tools} tools")
 
 
 def _filter_write_tools():
@@ -58,8 +66,11 @@ def _filter_write_tools():
     if hasattr(mcp, '_tool_manager') and hasattr(mcp._tool_manager, '_tools'):
         tools_dict = mcp._tool_manager._tools
         write_tools = [name for name in tools_dict.keys() if name not in READ_ONLY_TOOLS]
+        logger.debug(f"Removing {len(write_tools)} write tools: {write_tools}")
         for tool_name in write_tools:
             del tools_dict[tool_name]
+    else:
+        logger.warning("Could not access _tool_manager._tools for filtering")
 
 
 # Initialize FastMCP server
