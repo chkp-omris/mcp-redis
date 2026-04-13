@@ -2,6 +2,7 @@ import importlib
 import logging
 import pkgutil
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 logger = logging.getLogger(__name__)
 
@@ -77,4 +78,7 @@ def _filter_write_tools():
 mcp = FastMCP(
     "Redis MCP Server",
     dependencies=["redis", "dotenv", "numpy"],
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
 )

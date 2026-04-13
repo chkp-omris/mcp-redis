@@ -4,6 +4,8 @@ Unit tests for src/common/server.py
 
 from unittest.mock import patch
 
+from mcp.server.transport_security import TransportSecuritySettings
+
 from src.common.server import mcp
 
 
@@ -42,7 +44,11 @@ class TestMCPServer:
 
         # Verify FastMCP was called with correct parameters
         mock_fastmcp.assert_called_once_with(
-            "Redis MCP Server", dependencies=["redis", "dotenv", "numpy"]
+            "Redis MCP Server",
+            dependencies=["redis", "dotenv", "numpy"],
+            transport_security=TransportSecuritySettings(
+                enable_dns_rebinding_protection=False,
+            ),
         )
 
     def test_mcp_server_tool_decorator(self):
@@ -113,6 +119,9 @@ class TestMCPServer:
             "dotenv",
             "numpy",
         ]  # Keyword argument
+        assert call_args[1]["transport_security"] == TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
 
     def test_mcp_server_type(self):
         """Test that mcp server is of correct type."""
