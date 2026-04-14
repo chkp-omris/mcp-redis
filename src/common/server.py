@@ -27,7 +27,8 @@ READ_ONLY_TOOLS = {
     "json_get",
     # Server management
     "dbsize", "info", "client_list",
-    # Connection management (read-only operations)
+    # Connection management
+    "connect", "disconnect", "switch_default_connection",
     "list_connections", "get_connection",
     # Search/query operations
     "get_indexes", "get_index_info", "get_indexed_keys_number",
